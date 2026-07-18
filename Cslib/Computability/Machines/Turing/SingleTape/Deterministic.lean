@@ -482,12 +482,11 @@ noncomputable def PolyTimeComputable.id : PolyTimeComputable (Symbol := Symbol) 
   poly := 1
   bounds _ := by simp [TimeComputable.id]
 
--- TODO remove `h_mono` assumption
--- by developing function to convert PolyTimeComputable into one with monotone time bound
 /--
-A proof that the composition of two polytime computable functions is polytime computable.
+A proof that the composition of two polytime computable functions is polytime computable,
+assuming that the time bound of the second machine is monotone.
 -/
-noncomputable def PolyTimeComputable.comp {f g : List Symbol → List Symbol}
+noncomputable def PolyTimeComputable.comp' {f g : List Symbol → List Symbol}
     (hf : PolyTimeComputable f) (hg : PolyTimeComputable g)
     (h_mono : Monotone hg.timeBound) :
     PolyTimeComputable (g ∘ f) where
@@ -498,6 +497,34 @@ noncomputable def PolyTimeComputable.comp {f g : List Symbol → List Symbol}
     apply add_le_add
     · exact hf.bounds n
     · exact (h_mono (add_le_add (by omega) (hf.bounds n))).trans (hg.bounds _)
+
+-- by developing function to convert PolyTimeComputable into one with monotone time bound
+/--
+A proof that the composition of two polytime computable functions is polytime computable.
+-/
+noncomputable def PolyTimeComputable.comp {f g : List Symbol → List Symbol}
+    (hf : PolyTimeComputable f) (hg : PolyTimeComputable g) :
+    PolyTimeComputable (g ∘ f) :=
+  haveI eval_mono : ∀ p : Polynomial ℕ, Monotone p.eval := fun p ↦ by
+    intro a b hab
+    induction p using Polynomial.induction_on' with
+    | add p q hp hq =>
+      simpa only [eval_add] using Nat.add_le_add hp hq
+    | monomial n c =>
+      simpa only [eval_monomial] using Nat.mul_le_mul_left c (Nat.pow_le_pow_left hab n)
+  { toTimeComputable :=
+      letI hg' : TimeComputable g :=
+        { tm := hg.tm
+          timeBound := hg.poly.eval
+          outputsFunInTime := fun a ↦
+            RelatesWithinSteps.of_le (hg.outputsFunInTime a) (hg.bounds a.length) }
+      TimeComputable.comp hf.toTimeComputable hg' (eval_mono hg.poly)
+    poly := hf.poly + hg.poly.comp (1 + X + hf.poly)
+    bounds n := by
+      simp only [TimeComputable.comp, eval_add, eval_comp, eval_X, eval_one]
+      apply add_le_add
+      · exact hf.bounds n
+      · exact eval_mono hg.poly <| add_le_add (by omega) (hf.bounds n) }
 
 end PolyTimeComputable
 
